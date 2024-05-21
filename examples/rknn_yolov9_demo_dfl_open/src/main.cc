@@ -17,7 +17,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
+#include <boost/asio.hpp>
 
+#include <thread>
+#include <vector>
 #include "RgaUtils.h"
 #include "im2d.h"
 #include "opencv2/core/core.hpp"
@@ -91,7 +94,7 @@ static unsigned char *load_model(const char *filename, int *model_size)
     return data;
 }
 
-int detect(char *model_path, char *image_path, char *save_image_path)
+int detect(char *model_path, cv::Mat *src_image)
 {
     int status = 0;
     char *model_name = NULL;
@@ -112,8 +115,7 @@ int detect(char *model_path, char *image_path, char *save_image_path)
     memset(&src, 0, sizeof(src));
     memset(&dst, 0, sizeof(dst));
 
-    printf("Read %s ...\n", image_path);
-    cv::Mat src_image = cv::imread(image_path, 1);
+    printf("Read img ...\n");
     if (!src_image.data)
     {
         printf("cv::imread %s fail!\n", image_path);
@@ -287,32 +289,67 @@ int detect(char *model_path, char *image_path, char *save_image_path)
         putText(src_image, text1, cv::Point(xmin, ymin + 15), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 0, 255), 2);
     }
 
-    imwrite(save_image_path, src_image);
+    // imwrite(save_image_path, src_image);
 
-    printf("== obj: %d \n", int(float(DetectiontRects.size()) / 6.0));
+    // printf("== obj: %d \n", int(float(DetectiontRects.size()) / 6.0));
 
-    // release
-    ret = rknn_destroy(ctx);
+    // // release
+    // ret = rknn_destroy(ctx);
 
-    if (model_data)
-    {
-        free(model_data);
-    }
+    // if (model_data)
+    // {
+    //     free(model_data);
+    // }
 
-    if (resize_buf)
-    {
-        free(resize_buf);
-    }
+    // if (resize_buf)
+    // {
+    //     free(resize_buf);
+    // }
 
     return 0;
 }
 
+char model_path[256] = "/home/firefly/zhangqian/rknn/rknpu2_1.4.0/examples/rknn_yolov9_demo_dfl_open/model/RK3588/yolov9_relu_80class_zq.rknn";
+
+void process_connection(boost::asio::ip::tcp::socket socket)
+{
+    // 读取base64字符串
+    boost::beast::flat_buffer buffer;
+    boost::asio::read_until(socket, buffer, "\n");
+    std::string base64_string = boost::beast::buffers_to_string(buffer.data());
+
+    // 解码base64字符串
+    std::string decoded_string;
+    boost::beast::detail::base64::decode(decoded_string, base64_string);
+    std::vector<uchar> image_data(decoded_string.begin(), decoded_string.end());
+
+    // 将数据转换为OpenCV图像
+    cv::Mat image = cv::imdecode(image_data, cv::IMREAD_COLOR);
+
+    detect(model_path, image);
+
+    // 对图像数据进行分析
+    // ...
+}
+
+void process_images()
+{
+    boost::asio::io_service io_service;
+    boost::asio::ip::tcp::acceptor acceptor(io_service, boost::asio::ip::tcp::endpoint(boost::asio::ip::tcp::v4(), 12345));
+
+    while (true)
+    {
+        boost::asio::ip::tcp::socket socket(io_service);
+        acceptor.accept(socket);
+
+        std::thread t(process_connection, std::move(socket));
+        t.detach();
+    }
+}
+
 int main(int argc, char **argv)
 {
-    char model_path[256] = "/home/firefly/zhangqian/rknn/rknpu2_1.4.0/examples/rknn_yolov9_demo_dfl_open/model/RK3588/yolov9_relu_80class_zq.rknn";
-    char image_path[256] = "/home/firefly/zhangqian/rknn/rknpu2_1.4.0/examples/rknn_yolov9_demo_dfl_open/test.jpg";
-    char save_image_path[256] = "/home/firefly/zhangqian/rknn/rknpu2_1.4.0/examples/rknn_yolov9_demo_dfl_open/test_result.jpg";
-
-    detect(model_path, image_path, save_image_path);
+    std::thread t(process_images);
+    t.join();
     return 0;
 }
