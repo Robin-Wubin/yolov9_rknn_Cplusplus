@@ -18,6 +18,8 @@
 #include <string.h>
 #include <sys/time.h>
 #include <boost/asio.hpp>
+#include <boost/beast.hpp>
+#include <boost/beast/core/flat_buffer.hpp>
 
 #include <thread>
 #include <vector>
@@ -116,16 +118,14 @@ int detect(char *model_path, cv::Mat *src_image)
     memset(&dst, 0, sizeof(dst));
 
     printf("Read img ...\n");
-    if (!src_image.data)
+    if (!src_image->data)
     {
-        printf("cv::imread %s fail!\n", image_path);
+        printf("cv::imread fail!\n");
         return -1;
     }
-    cv::Mat img;
-    cv::cvtColor(src_image, img, cv::COLOR_BGR2RGB);
 
-    img_width = img.cols;
-    img_height = img.rows;
+    img_width = src_image->cols;
+    img_height = src_image->rows;
 
     printf("img width = %d, img height = %d\n", img_width, img_height);
 
@@ -217,7 +217,7 @@ int detect(char *model_path, cv::Mat *src_image)
         resize_buf = malloc(height * width * channel);
         memset(resize_buf, 0x00, height * width * channel);
 
-        src = wrapbuffer_virtualaddr((void *)img.data, img_width, img_height, RK_FORMAT_RGB_888);
+        src = wrapbuffer_virtualaddr((void *)src_image->data, img_width, img_height, RK_FORMAT_RGB_888);
         dst = wrapbuffer_virtualaddr((void *)resize_buf, width, height, RK_FORMAT_RGB_888);
         ret = imcheck(src, dst, src_rect, dst_rect);
         if (IM_STATUS_NOERROR != ret)
@@ -230,7 +230,7 @@ int detect(char *model_path, cv::Mat *src_image)
     }
     else
     {
-        inputs[0].buf = (void *)img.data;
+        inputs[0].buf = (void *)src_image->data;
     }
 
     gettimeofday(&start_time, NULL);
@@ -274,6 +274,9 @@ int detect(char *model_path, cv::Mat *src_image)
     gettimeofday(&stop_time, NULL);
     printf("postprocess once run use %f ms\n", (__get_us(stop_time) - __get_us(start_time)) / 1000);
 
+    // 将 cv::Mat 对象转换为 cv::InputOutputArray
+    cv::InputOutputArray imageInputOutputArray(*src_image);
+
     for (int i = 0; i < DetectiontRects.size(); i += 6)
     {
         int classId = int(DetectiontRects[i + 0]);
@@ -285,8 +288,8 @@ int detect(char *model_path, cv::Mat *src_image)
 
         char text1[256];
         sprintf(text1, "%d:%.2f", classId, conf);
-        rectangle(src_image, cv::Point(xmin, ymin), cv::Point(xmax, ymax), cv::Scalar(255, 0, 0), 2);
-        putText(src_image, text1, cv::Point(xmin, ymin + 15), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 0, 255), 2);
+        rectangle(imageInputOutputArray, cv::Point(xmin, ymin), cv::Point(xmax, ymax), cv::Scalar(255, 0, 0), 2);
+        putText(imageInputOutputArray, text1, cv::Point(xmin, ymin + 15), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 0, 255), 2);
     }
 
     // imwrite(save_image_path, src_image);
@@ -314,19 +317,22 @@ char model_path[256] = "/home/firefly/zhangqian/rknn/rknpu2_1.4.0/examples/rknn_
 void process_connection(boost::asio::ip::tcp::socket socket)
 {
     // 读取base64字符串
-    boost::beast::flat_buffer buffer;
+    boost::asio::streambuf buffer;
     boost::asio::read_until(socket, buffer, "\n");
     std::string base64_string = boost::beast::buffers_to_string(buffer.data());
 
     // 解码base64字符串
-    std::string decoded_string;
-    boost::beast::detail::base64::decode(decoded_string, base64_string);
-    std::vector<uchar> image_data(decoded_string.begin(), decoded_string.end());
+
+    // 创建一个足够大的缓冲区来存储解码后的数据
+    // 计算解码后的大小，这通常是Base64字符串长度的3/4
+    std::size_t decoded_size = base64_string.size() * 3 / 4;
+    std::vector<unsigned char> img_buffer(decoded_size);
+    boost::beast::detail::base64::decode(img_buffer.data(), base64_string.data(), base64_string.size());
 
     // 将数据转换为OpenCV图像
-    cv::Mat image = cv::imdecode(image_data, cv::IMREAD_COLOR);
+    cv::Mat image = cv::imdecode(cv::Mat(img_buffer), cv::IMREAD_COLOR);
 
-    detect(model_path, image);
+    detect(model_path, &image);
 
     // 对图像数据进行分析
     // ...

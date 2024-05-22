@@ -65,7 +65,7 @@ else()
   else()
     set(LIB_ARCH armhf)
   endif()
-  set(RGA_LIB ${RGA_PATH}/lib/Linux//${LIB_ARCH}/librga.so)
+  set(RGA_LIB ${RGA_PATH}/lib/Linux/${LIB_ARCH}/librga.so)
 endif()
 include_directories( ${RGA_PATH}/include)
 
