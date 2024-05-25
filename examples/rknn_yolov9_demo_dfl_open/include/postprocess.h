@@ -9,7 +9,6 @@
 typedef signed char int8_t;
 typedef unsigned int uint32_t;
 
-
 typedef struct
 {
     float xmin;
@@ -38,12 +37,12 @@ private:
     std::vector<float> meshgrid;
 
     const int class_num = 80;
-    int headNum = 3;
+    int headNum = 1;
 
     int input_w = 640;
     int input_h = 640;
     int strides[3] = {8, 16, 32};
-    int mapSize[3][2] = {{80, 80}, {40, 40}, {20, 20}};
+    int mapSize[1][2] = {{84, 8400}};
 
     std::vector<float> regdfl;
     float regdeq[16] = {0};

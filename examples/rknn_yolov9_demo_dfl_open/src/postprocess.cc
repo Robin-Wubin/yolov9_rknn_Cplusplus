@@ -5,6 +5,7 @@
 #define ZQ_MAX(a, b) ((a) > (b) ? (a) : (b))
 #define ZQ_MIN(a, b) ((a) < (b) ? (a) : (b))
 
+// 这个函数的目的是提供一个比标准库函数 exp 更快的实现，用于计算自然指数函数 e^x。
 static inline float fast_exp(float x)
 {
     // return exp(x);
@@ -17,6 +18,7 @@ static inline float fast_exp(float x)
     return v.f;
 }
 
+// 用于计算两个矩形的交并比（Intersection over Union，IoU）
 static inline float IOU(float XMin1, float YMin1, float XMax1, float YMax1, float XMin2, float YMin2, float XMax2, float YMax2)
 {
     float Inter = 0;
@@ -51,6 +53,7 @@ static inline float IOU(float XMin1, float YMin1, float XMax1, float YMax1, floa
     return float(Inter) / float(Total);
 }
 
+// 将量化的值（quantized value）转换回浮点数。
 static float DeQnt2F32(int8_t qnt, int zp, float scale)
 {
     return ((float)qnt - (float)zp) * scale;
@@ -107,7 +110,6 @@ int GetResultRectYolov9::GetConvDetectionResult(int8_t **pBlob, std::vector<int>
     float xmin = 0, ymin = 0, xmax = 0, ymax = 0;
     float cls_val = 0;
     float cls_max = 0;
-    int cls_index = 0;
 
     int quant_zp_cls = 0, quant_zp_reg = 0;
     float quant_scale_cls = 0, quant_scale_reg = 0;
@@ -119,96 +121,47 @@ int GetResultRectYolov9::GetConvDetectionResult(int8_t **pBlob, std::vector<int>
     DetectRect temp;
     std::vector<DetectRect> detectRects;
 
-    for (int index = 0; index < headNum; index++)
+    int row = mapSize[0][0];
+    int col = mapSize[0][1];
+
+    printf("=== Detection result: row:%d, col:%d\n", row, col);
+
+    int zp = qnt_zp[0];
+    float scale = qnt_scale[0];
+
+    for (int y = 0; y < col; y++)
     {
-        int8_t *reg = (int8_t *)pBlob[index * 2 + 0];
-        int8_t *cls = (int8_t *)pBlob[index * 2 + 1];
+        int xrow = 0;
+        int yrow = 1;
+        int wrow = 2;
+        int hrow = 3;
+        int cx = DeQnt2F32(pBlob[0][xrow * col + y], zp, scale);
+        int cy = DeQnt2F32(pBlob[0][yrow * col + y], zp, scale);
+        int w = DeQnt2F32(pBlob[0][wrow * col + y], zp, scale);
+        int h = DeQnt2F32(pBlob[0][hrow * col + y], zp, scale);
 
-        quant_zp_reg = qnt_zp[index * 2 + 0];
-        quant_zp_cls = qnt_zp[index * 2 + 1];
-
-        quant_scale_reg = qnt_scale[index * 2 + 0];
-        quant_scale_cls = qnt_scale[index * 2 + 1];
-
-        for (int h = 0; h < mapSize[index][0]; h++)
+        if (w <= 0 && h <= 0)
         {
-            for (int w = 0; w < mapSize[index][1]; w++)
+            continue;
+        }
+
+        float maxClassVal = -1;
+        int cls_index = -1;
+        for (int i = 4; i < row; i++)
+        {
+            float val = pBlob[0][i * col + y];
+            if (val > maxClassVal)
             {
-                gridIndex += 2;
-
-                if (1 == class_num)
-                {
-                    cls_max = sigmoid(DeQnt2F32(cls[0 * mapSize[index][0] * mapSize[index][1] + h * mapSize[index][1] + w], quant_zp_cls, quant_scale_cls));
-                    cls_index = 0;
-                }
-                else
-                {
-                    for (int cl = 0; cl < class_num; cl++)
-                    {
-                        cls_val = cls[cl * mapSize[index][0] * mapSize[index][1] + h * mapSize[index][1] + w];
-
-                        if (0 == cl)
-                        {
-                            cls_max = cls_val;
-                            cls_index = cl;
-                        }
-                        else
-                        {
-                            if (cls_val > cls_max)
-                            {
-                                cls_max = cls_val;
-                                cls_index = cl;
-                            }
-                        }
-                    }
-                    cls_max = sigmoid(DeQnt2F32(cls_max, quant_zp_cls, quant_scale_cls));
-                }
-
-                if (cls_max > objectThresh)
-                {
-                    regdfl.clear();
-                    for (int lc = 0; lc < 4; lc++)
-                    {
-                        sfsum = 0;
-                        locval = 0;
-                        for (int df = 0; df < 16; df++)
-                        {
-                            locvaltemp = exp(DeQnt2F32(reg[((lc * 16) + df) * mapSize[index][0] * mapSize[index][1] + h * mapSize[index][1] + w], quant_zp_reg, quant_scale_reg));
-                            regdeq[df] = locvaltemp;
-                            sfsum += locvaltemp;
-                        }
-                        for (int df = 0; df < 16; df++)
-                        {
-                            locvaltemp = regdeq[df] / sfsum;
-                            locval += locvaltemp * df;
-                        }
-
-                        regdfl.push_back(locval);
-                    }
-
-                    xmin = (meshgrid[gridIndex + 0] - regdfl[0]) * strides[index];
-                    ymin = (meshgrid[gridIndex + 1] - regdfl[1]) * strides[index];
-                    xmax = (meshgrid[gridIndex + 0] + regdfl[2]) * strides[index];
-                    ymax = (meshgrid[gridIndex + 1] + regdfl[3]) * strides[index];
-
-                    xmin = xmin > 0 ? xmin : 0;
-                    ymin = ymin > 0 ? ymin : 0;
-                    xmax = xmax < input_w ? xmax : input_w;
-                    ymax = ymax < input_h ? ymax : input_h;
-
-                    if (xmin >= 0 && ymin >= 0 && xmax <= input_w && ymax <= input_h)
-                    {
-                        temp.xmin = xmin / input_w;
-                        temp.ymin = ymin / input_h;
-                        temp.xmax = xmax / input_w;
-                        temp.ymax = ymax / input_h;
-                        temp.classId = cls_index;
-                        temp.score = cls_max;
-                        detectRects.push_back(temp);
-                    }
-                }
+                maxClassVal = val;
+                cls_index = i;
             }
         }
+        if (maxClassVal <= 0)
+        {
+            continue;
+        }
+
+        printf("row: %d, cx: %d, cy: %d, w: %d, h: %d, class_id: %d, conf: %d\n, ", y, cx, cy, w, h, cls_index - 4, maxClassVal);
     }
 
     std::sort(detectRects.begin(), detectRects.end(), [](DetectRect &Rect1, DetectRect &Rect2) -> bool

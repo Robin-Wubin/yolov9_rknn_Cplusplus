@@ -1,2 +1,4 @@
 
 .vscode
+examples/build
+examples/install

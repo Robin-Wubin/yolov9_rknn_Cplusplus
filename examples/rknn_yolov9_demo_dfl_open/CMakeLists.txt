@@ -77,6 +77,7 @@ include_directories( ${CMAKE_SOURCE_DIR}/include)
 add_executable(rknn_yolov9_demo
         src/main.cc
         src/postprocess.cc
+        src/rknnprocess.cc
 )
 
 target_link_libraries(rknn_yolov9_demo
