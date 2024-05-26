@@ -242,32 +242,32 @@ src/postprocess.cc.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/rknn_yolov9_demo.dir/build.make CMakeFiles/rknn_yolov9_demo.dir/src/postprocess.cc.s
 .PHONY : src/postprocess.cc.s
 
-src/rknnprocess.o: src/rknnprocess.cc.o
+src/yolov8.o: src/yolov8.cc.o
 
-.PHONY : src/rknnprocess.o
+.PHONY : src/yolov8.o
 
 # target to build an object file
-src/rknnprocess.cc.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/rknn_yolov9_demo.dir/build.make CMakeFiles/rknn_yolov9_demo.dir/src/rknnprocess.cc.o
-.PHONY : src/rknnprocess.cc.o
+src/yolov8.cc.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/rknn_yolov9_demo.dir/build.make CMakeFiles/rknn_yolov9_demo.dir/src/yolov8.cc.o
+.PHONY : src/yolov8.cc.o
 
-src/rknnprocess.i: src/rknnprocess.cc.i
+src/yolov8.i: src/yolov8.cc.i
 
-.PHONY : src/rknnprocess.i
+.PHONY : src/yolov8.i
 
 # target to preprocess a source file
-src/rknnprocess.cc.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/rknn_yolov9_demo.dir/build.make CMakeFiles/rknn_yolov9_demo.dir/src/rknnprocess.cc.i
-.PHONY : src/rknnprocess.cc.i
+src/yolov8.cc.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/rknn_yolov9_demo.dir/build.make CMakeFiles/rknn_yolov9_demo.dir/src/yolov8.cc.i
+.PHONY : src/yolov8.cc.i
 
-src/rknnprocess.s: src/rknnprocess.cc.s
+src/yolov8.s: src/yolov8.cc.s
 
-.PHONY : src/rknnprocess.s
+.PHONY : src/yolov8.s
 
 # target to generate assembly for a file
-src/rknnprocess.cc.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/rknn_yolov9_demo.dir/build.make CMakeFiles/rknn_yolov9_demo.dir/src/rknnprocess.cc.s
-.PHONY : src/rknnprocess.cc.s
+src/yolov8.cc.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/rknn_yolov9_demo.dir/build.make CMakeFiles/rknn_yolov9_demo.dir/src/yolov8.cc.s
+.PHONY : src/yolov8.cc.s
 
 # Help Target
 help:
@@ -288,9 +288,9 @@ help:
 	@echo "... src/postprocess.o"
 	@echo "... src/postprocess.i"
 	@echo "... src/postprocess.s"
-	@echo "... src/rknnprocess.o"
-	@echo "... src/rknnprocess.i"
-	@echo "... src/rknnprocess.s"
+	@echo "... src/yolov8.o"
+	@echo "... src/yolov8.i"
+	@echo "... src/yolov8.s"
 .PHONY : help
 
 

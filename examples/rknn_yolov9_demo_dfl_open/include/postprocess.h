@@ -1,54 +1,59 @@
-#ifndef _POSTPROCESS_H_
-#define _POSTPROCESS_H_
+#ifndef _RKNN_YOLOV8_DEMO_POSTPROCESS_H_
+#define _RKNN_YOLOV8_DEMO_POSTPROCESS_H_
 
-#include <iostream>
-#include <stdio.h>
-#include <unistd.h>
+#include <stdint.h>
 #include <vector>
+#include "rknn_api.h"
 
-typedef signed char int8_t;
-typedef unsigned int uint32_t;
+#define OBJ_NAME_MAX_SIZE 64
+#define OBJ_NUMB_MAX_SIZE 128
+#define OBJ_CLASS_NUM 80
+#define NMS_THRESH 0.45
+#define BOX_THRESH 0.25
+
+// class rknn_app_context_t;
+
+/**
+ * @brief Image rectangle
+ *
+ */
+typedef struct
+{
+    int left;
+    int top;
+    int right;
+    int bottom;
+} image_rect_t;
 
 typedef struct
 {
-    float xmin;
-    float ymin;
-    float xmax;
-    float ymax;
-    float score;
-    int classId;
-} DetectRect;
+    image_rect_t box;
+    float prop;
+    int cls_id;
+} object_detect_result;
 
-// yolov9
-class GetResultRectYolov9
+/**
+ * @brief LetterBox
+ *
+ */
+typedef struct
 {
-public:
-    GetResultRectYolov9();
+    int x_pad;
+    int y_pad;
+    float scale;
+} letterbox_t;
 
-    ~GetResultRectYolov9();
+typedef struct
+{
+    int id;
+    int count;
+    object_detect_result results[OBJ_NUMB_MAX_SIZE];
+} object_detect_result_list;
 
-    int GenerateMeshgrid();
+int init_post_process();
+void deinit_post_process();
+char *coco_cls_to_name(int cls_id);
+int post_process(rknn_app_context_t *app_ctx, void *outputs, letterbox_t *letter_box, float conf_threshold, float nms_threshold, object_detect_result_list *od_results);
 
-    int GetConvDetectionResult(int8_t **pBlob, std::vector<int> &qnt_zp, std::vector<float> &qnt_scale, std::vector<float> &DetectiontRects);
-
-    float sigmoid(float x);
-
-private:
-    std::vector<float> meshgrid;
-
-    const int class_num = 80;
-    int headNum = 1;
-
-    int input_w = 640;
-    int input_h = 640;
-    int strides[3] = {8, 16, 32};
-    int mapSize[1][2] = {{84, 8400}};
-
-    std::vector<float> regdfl;
-    float regdeq[16] = {0};
-
-    float nmsThresh = 0.45;
-    float objectThresh = 0.5;
-};
-
-#endif
+void deinitPostProcess();
+#endif //_RKNN_YOLOV8_DEMO_POSTPROCESS_H_
