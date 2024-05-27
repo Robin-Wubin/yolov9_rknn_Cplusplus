@@ -1,5 +1,5 @@
 
 .vscode
-examples/build
-examples/install
-.rknn
+*.rknn
+examples/rknn_yolov9_demo_dfl_open/build
+examples/rknn_yolov9_demo_dfl_open/install
