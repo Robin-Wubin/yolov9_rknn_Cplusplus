@@ -1,5 +1,6 @@
 
 .vscode
 *.rknn
-examples/rknn_yolov9_demo_dfl_open/build
-examples/rknn_yolov9_demo_dfl_open/install
+examples/rknn_yolov9_demo_dfl_open/build/*
+examples/rknn_yolov9_demo_dfl_open/install/*
+examples/rknn_yolov9_demo_dfl_open/node_modules/*

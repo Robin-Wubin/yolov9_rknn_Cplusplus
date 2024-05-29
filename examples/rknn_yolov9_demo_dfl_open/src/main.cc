@@ -1,6 +1,7 @@
 #include "main.h"
 #include "rknnprocess.h"
 #include "yolov8.h"
+#include "face_landmarks.h"
 
 // 使用简化的命名空间
 using boost::asio::ip::tcp;
@@ -11,7 +12,7 @@ std::condition_variable queueCondition;
 
 char model_path[256] = "model/yolov8n.rknn";
 
-void handleRequest()
+void handleRequestThread(tcp::socket *socket)
 {
 
     rknn_app_context_t rknn_app_ctx;
@@ -25,6 +26,58 @@ void handleRequest()
         return;
     }
 
+    ret = init_face_detector();
+    if (ret != 0)
+    {
+        printf("init_face_detector fail! ret=%d\n", ret);
+        return;
+    }
+
+    // 发送 "ready" 字符串
+    std::string response = "ready";
+    boost::asio::write(*socket, boost::asio::buffer(response));
+
+    // 循环读取socket穿过来的图像buf数据（以"--bonary\n"分割），并进行分析
+    while (true)
+    {
+        // 读取图像数据
+        boost::asio::streambuf buf;
+        boost::asio::read_until(*socket, buf, "--bonary\n");
+
+        // buf中移除尾部的“--bonary\n”
+        buf.consume(9);
+
+        // buf 转成 string
+        std::string data(boost::asio::buffers_begin(buf.data()), boost::asio::buffers_end(buf.data()));
+
+        // 打印字符串
+        printf("data.size()=%s\n", data);
+
+        printf("buf.size()=%d\n", buf.size());
+
+        // 将 streambuf 转换为 std::vector<unsigned char>
+        // Convert streambuf to std::vector
+        std::vector<unsigned char> buffer(boost::asio::buffer_cast<const unsigned char *>(buf.data()), boost::asio::buffer_cast<const unsigned char *>(buf.data()) + buf.size());
+
+        printf("buffer.size()=%d\n", buffer.size());
+        // Convert std::vector to cv::Mat
+        cv::Mat img_data = cv::Mat(buffer);
+
+        printf("img_data.size()=%d\n", img_data.size());
+
+        object_detect_result_list od_results;
+
+        int ret = inference_yolov8_model(&rknn_app_ctx, &img_data, &od_results);
+
+        // 响应 "ok" 字符串
+        // std::string response = "ok";
+        // boost::asio::write(*socket, boost::asio::buffer(response));
+    }
+}
+
+void handleRequest()
+{
+
     while (true)
     {
         std::unique_lock<std::mutex> lock(queueMutex);
@@ -35,30 +88,11 @@ void handleRequest()
         tcp::socket *raw_socket = socket.get();
         requestQueue.pop();
         lock.unlock();
-        
-        // 读取base64字符串
-        boost::asio::streambuf buffer;
-        boost::asio::read_until(*socket, buffer, "\n");
-        std::string base64_string = boost::beast::buffers_to_string(buffer.data());
 
-        
-        std::size_t decoded_size = base64_string.size() * 3 / 4;
-        std::vector<unsigned char> img_buffer(decoded_size);
-        boost::beast::detail::base64::decode(img_buffer.data(), base64_string.data(), base64_string.size());
+        // 新建一个线程，并把raw_socket传到线程内进行处理
+        std::thread t1(handleRequestThread, raw_socket);
 
-            // 获取socket传输的内容，并传给rknnprocess进行分析
-            
-        object_detect_result_list od_results;
-
-        ret = inference_yolov8_model(&rknn_app_ctx, &img_buffer, &od_results);
-        
-
-        // 响应 "ok" 字符串
-        // std::string response = "ok";
-        // boost::asio::write(*socket, boost::asio::buffer(response));
-
-        // 关闭连接
-        socket->close();
+        t1.detach();
     }
 }
 

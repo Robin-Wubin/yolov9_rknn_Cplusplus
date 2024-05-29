@@ -1,9 +1,25 @@
 cmake_minimum_required(VERSION 3.4.1)
-
+SET( TARGETFILENAME "addon" )
 project(rknn_yolov9_demo)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+
+SET(NODE_LIBRARIES node.lib)
+# 设置CMAKE_PREFIX_PATH和CMAKE_LIBRARY_PATH
+set(CMAKE_PREFIX_PATH "/usr/local;/usr;/opt")
+set(CMAKE_LIBRARY_PATH "/usr/local/lib;/usr/lib;/opt/lib")
+
+# 找到dlib
+find_package(dlib REQUIRED)
+if(dlib_FOUND)
+    link_directories(${dlib_LIBRARY_DIRS})
+else()
+    message(FATAL_ERROR "Could not find dlib")
+endif()
+
+set(DLIB_LIB ${RGA_PATH}/lib/Android/${CMAKE_ANDROID_ARCH_ABI}/librga.so)
 
 # skip 3rd-party lib dependencies
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--allow-shlib-undefined")
@@ -78,9 +94,11 @@ add_executable(rknn_yolov9_demo
         src/main.cc
         src/postprocess.cc
         src/yolov8.cc
+        src/face_landmarks.cc
 )
 
 target_link_libraries(rknn_yolov9_demo
+  dlib::dlib
   ${RKNN_RT_LIB}
   ${RGA_LIB}
   ${OpenCV_LIBS}

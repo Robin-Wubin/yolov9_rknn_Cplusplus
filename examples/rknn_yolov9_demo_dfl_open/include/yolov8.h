@@ -21,9 +21,9 @@
 #include "rga.h"
 #include "RgaUtils.h"
 #include "im2d.h"
-#include "opencv2/core/core.hpp"
-#include "opencv2/imgcodecs.hpp"
-#include "opencv2/imgproc.hpp"
+#include <opencv2/core/core.hpp>
+#include <opencv2/imgcodecs.hpp>
+#include <opencv2/imgproc.hpp>
 
 typedef struct
 {
@@ -43,6 +43,6 @@ int init_yolov8_model(const char *model_path, rknn_app_context_t *app_ctx);
 
 int release_yolov8_model(rknn_app_context_t *app_ctx);
 
-int inference_yolov8_model(rknn_app_context_t *app_ctx, std::vector<unsigned char> *img_buffer, object_detect_result_list *od_results);
+int inference_yolov8_model(rknn_app_context_t *app_ctx, unsigned char *data, int size, object_detect_result_list *od_results);
 
 #endif //_RKNN_DEMO_YOLOV8_H_

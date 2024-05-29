@@ -62,24 +62,14 @@ static void dump_tensor_attr(rknn_tensor_attr *attr)
            get_qnt_type_string(attr->qnt_type), attr->zp, attr->scale);
 }
 
-int deal_image(std::vector<unsigned char> *img_buffer, rknn_input *inputs)
+int deal_image(cv::Mat *src_image, rknn_input *inputs)
 {
-
-    // 将数据转换为OpenCV图像
-    cv::Mat src_image = cv::imdecode(cv::Mat(*img_buffer), cv::IMREAD_COLOR);
 
     int ret;
 
     int img_width = 0;
     int img_height = 0;
     int img_channel = 0;
-
-    printf("Read img ...\n");
-    if (!src_image.data)
-    {
-        printf("cv::imread fail!\n");
-        return -1;
-    }
 
     rga_buffer_t src;
     rga_buffer_t dst;
@@ -92,8 +82,8 @@ int deal_image(std::vector<unsigned char> *img_buffer, rknn_input *inputs)
     memset(&src_rect, 0, sizeof(src_rect));
     memset(&dst_rect, 0, sizeof(dst_rect));
 
-    img_width = src_image.cols;
-    img_height = src_image.rows;
+    img_width = src_image->cols;
+    img_height = src_image->rows;
 
     printf("img width = %d, img height = %d\n", img_width, img_height);
 
@@ -111,7 +101,7 @@ int deal_image(std::vector<unsigned char> *img_buffer, rknn_input *inputs)
         resize_buf = malloc(yolo_height * yolo_width * yolo_channel);
         memset(resize_buf, 0x00, yolo_height * yolo_width * yolo_channel);
 
-        src = wrapbuffer_virtualaddr((void *)src_image.data, img_width, img_height, RK_FORMAT_RGB_888);
+        src = wrapbuffer_virtualaddr((void *)src_image->data, img_width, img_height, RK_FORMAT_RGB_888);
         dst = wrapbuffer_virtualaddr((void *)resize_buf, yolo_width, yolo_height, RK_FORMAT_RGB_888);
         ret = imcheck(src, dst, src_rect, dst_rect);
         if (IM_STATUS_NOERROR != ret)
@@ -124,7 +114,7 @@ int deal_image(std::vector<unsigned char> *img_buffer, rknn_input *inputs)
     }
     else
     {
-        inputs[0].buf = (void *)src_image.data;
+        inputs[0].buf = (void *)src_image->data;
     }
 
     return ret;
@@ -269,7 +259,7 @@ int release_yolov8_model(rknn_app_context_t *app_ctx)
     return 0;
 }
 
-int inference_yolov8_model(rknn_app_context_t *app_ctx, std::vector<unsigned char> *img_buffer, object_detect_result_list *od_results)
+int inference_yolov8_model(rknn_app_context_t *app_ctx, unsigned char *data, int size, object_detect_result_list *od_results)
 {
 
     struct timeval start_time, stop_time;
@@ -280,8 +270,28 @@ int inference_yolov8_model(rknn_app_context_t *app_ctx, std::vector<unsigned cha
     const float box_conf_threshold = BOX_THRESH; // 默认的置信度阈值
     int bg_color = 114;
 
-    if ((!app_ctx) || !(img_buffer) || (!od_results))
+    if ((!app_ctx) || !(data) || (!od_results))
     {
+        return -1;
+    }
+
+    // 打印buffer
+    std::vector<unsigned char> png_data(data, data + size);
+
+    // 打印png_data的长度
+    printf("png_data.size()=%d\n", png_data.size());
+
+    cv::Mat img_data = cv::Mat(png_data);
+
+    printf("img_data.size()=%d\n", img_data.size());
+
+    // 将数据转换为OpenCV图像
+    cv::Mat src_image = cv::imdecode(img_data, cv::IMREAD_COLOR);
+
+    printf("Read img ...\n");
+    if (!src_image.data)
+    {
+        printf("cv::imread fail!\n");
         return -1;
     }
 
@@ -289,7 +299,7 @@ int inference_yolov8_model(rknn_app_context_t *app_ctx, std::vector<unsigned cha
     memset(inputs, 0, sizeof(inputs));
     memset(outputs, 0, sizeof(outputs));
 
-    ret = deal_image(img_buffer, inputs);
+    ret = deal_image(&src_image, inputs);
     if (ret < 0)
     {
         printf("deal_image fail! ret=%d\n", ret);
@@ -326,6 +336,13 @@ int inference_yolov8_model(rknn_app_context_t *app_ctx, std::vector<unsigned cha
         printf("rknn_outputs_get fail! ret=%d\n", ret);
         return -1;
     }
+
+    // ret = face_landmarks(&src_image);
+    // if (ret < 0)
+    // {
+    //     printf("face_landmarks fail! ret=%d\n", ret);
+    //     return -1;
+    // }
 
     gettimeofday(&stop_time, NULL);
 
