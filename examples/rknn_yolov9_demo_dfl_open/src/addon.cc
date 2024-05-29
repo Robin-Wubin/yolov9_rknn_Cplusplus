@@ -3,13 +3,16 @@
 #include <queue>
 #include <mutex>
 #include "yolov8.h"
+#include "retinaface.h"
 
 using namespace Nan;
 using namespace v8;
 
 rknn_app_context_t rknn_app_ctx;
+rknn_app_context_t face_app_ctx;
 
-char model_path[256] = "model/yolov8n.rknn";
+char yolov_path[256] = "model/yolov8n.rknn";
+char face_path[256] = "model/RetinaFace.rknn";
 
 // 定义算法函数，接受图像的 buffer 并返回结果
 
@@ -42,7 +45,6 @@ NAN_METHOD(AlgorithmMethod)
 
     printf("%d:%d\n", size, len);
 
-
     object_detect_result_list od_results;
 
     int ret = inference_yolov8_model(&rknn_app_ctx, data, size, &od_results);
@@ -59,10 +61,18 @@ NAN_MODULE_INIT(Initialize)
 
     int ret;
 
-    ret = init_yolov8_model(model_path, &rknn_app_ctx);
+    ret = init_yolov8_model(yolov_path, &rknn_app_ctx);
     if (ret != 0)
     {
         return Nan::ThrowTypeError("init_yolov8_model fail!");
+    }
+
+    int ret;
+
+    ret = init_retinaface_model(face_path, &face_app_ctx);
+    if (ret != 0)
+    {
+        return Nan::ThrowTypeError("init_retinaface_model fail!");
     }
 
     // 导出算法调用的方法
