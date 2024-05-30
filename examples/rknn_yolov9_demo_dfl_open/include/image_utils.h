@@ -15,7 +15,7 @@ extern "C"
      * @param image [out] Read image
      * @return int 0: success; -1: error
      */
-    int read_image(image_buffer_t *image, , unsigned char *data, int size);
+    int read_image(image_buffer_t *image, unsigned char *data, int size);
 
     /**
      * @brief Write image file (support jpg/png)

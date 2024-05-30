@@ -270,7 +270,7 @@ int inference_retinaface_model(app_context_t *app_ctx, unsigned char *data, int 
     ret = read_image(&src_image, data, size);
     if (ret != 0)
     {
-        printf("read image fail! ret=%d image_path=%s\n", ret, image_path);
+        printf("read image fail! ret=%d\n", ret);
         return -1;
     }
 
@@ -287,7 +287,7 @@ int inference_retinaface_model(app_context_t *app_ctx, unsigned char *data, int 
         return -1;
     }
 
-    ret = convert_image_with_letterbox(src_img, &img, &letter_box, bg_color);
+    ret = convert_image_with_letterbox(&src_image, &img, &letter_box, bg_color);
     if (ret < 0)
     {
         printf("convert_image fail! ret=%d\n", ret);

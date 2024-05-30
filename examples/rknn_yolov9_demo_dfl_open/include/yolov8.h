@@ -28,14 +28,6 @@
 
 typedef struct
 {
-    int left;
-    int top;
-    int right;
-    int bottom;
-} image_rect_t;
-
-typedef struct
-{
     image_rect_t box;
     float prop;
     int cls_id;
