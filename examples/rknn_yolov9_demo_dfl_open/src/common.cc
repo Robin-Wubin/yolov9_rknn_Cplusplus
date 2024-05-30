@@ -38,7 +38,7 @@ void dump_tensor_attr(rknn_tensor_attr *attr)
            get_qnt_type_string(attr->qnt_type), attr->zp, attr->scale);
 }
 
-int deal_image(app_context_t *app_ctx, cv::Mat *src_image, rknn_input *inputs)
+int deal_image(app_context_t *app_ctx, cv::Mat *src_image, rknn_input *inputs, bool *resize)
 {
 
     int ret;
@@ -46,6 +46,7 @@ int deal_image(app_context_t *app_ctx, cv::Mat *src_image, rknn_input *inputs)
     int width = app_ctx->model_width;
     int height = app_ctx->model_height;
     int channel = app_ctx->model_channel;
+    printf("input width = %d, img height = %d, img channel = %d\n", width, height, channel);
 
     int img_width = 0;
     int img_height = 0;
@@ -69,20 +70,17 @@ int deal_image(app_context_t *app_ctx, cv::Mat *src_image, rknn_input *inputs)
 
     inputs[0].index = 0;
     inputs[0].type = RKNN_TENSOR_UINT8;
-    inputs[0].size = width * height * channel;
     inputs[0].fmt = RKNN_TENSOR_NHWC;
-    inputs[0].pass_through = 0;
-
-    void *resize_buf = nullptr;
+    inputs[0].size = width * height * channel;
 
     if (img_width != width || img_height != height)
     {
-        printf("resize with RGA!\n");
-        resize_buf = malloc(width * height * channel);
+        printf("resize with RGA! size: %d\n", width * height * channel);
+        void *resize_buf = malloc(width * height * channel);
         memset(resize_buf, 0x00, width * height * channel);
 
         src = wrapbuffer_virtualaddr((void *)src_image->data, img_width, img_height, RK_FORMAT_RGB_888);
-        dst = wrapbuffer_virtualaddr((void *)resize_buf, width, height, RK_FORMAT_RGB_888);
+        dst = wrapbuffer_virtualaddr(resize_buf, width, height, RK_FORMAT_RGB_888);
         ret = imcheck(src, dst, src_rect, dst_rect);
         if (IM_STATUS_NOERROR != ret)
         {
@@ -91,6 +89,7 @@ int deal_image(app_context_t *app_ctx, cv::Mat *src_image, rknn_input *inputs)
         }
         IM_STATUS STATUS = imresize(src, dst);
         inputs[0].buf = resize_buf;
+        *resize = true;
     }
     else
     {

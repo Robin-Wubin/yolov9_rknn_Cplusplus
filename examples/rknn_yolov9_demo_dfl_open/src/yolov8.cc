@@ -172,6 +172,7 @@ int inference_yolov8_model(app_context_t *app_ctx, unsigned char *data, int size
     const float nms_threshold = NMS_THRESH;      // 默认的NMS阈值
     const float box_conf_threshold = BOX_THRESH; // 默认的置信度阈值
     int bg_color = 114;
+    bool resize = false;
 
     if ((!app_ctx) || !(data) || (!od_results))
     {
@@ -181,20 +182,13 @@ int inference_yolov8_model(app_context_t *app_ctx, unsigned char *data, int size
     // 打印buffer
     std::vector<unsigned char> png_data(data, data + size);
 
-    // 打印png_data的长度
-    printf("png_data.size()=%d\n", png_data.size());
-
     cv::Mat img_data = cv::Mat(png_data);
-
-    printf("img_data.size()=%d\n", img_data.size());
 
     // 将数据转换为OpenCV图像
     cv::Mat src_image = cv::imdecode(img_data, cv::IMREAD_COLOR);
 
-    printf("Read img ...\n");
     if (!src_image.data)
     {
-        printf("cv::imread fail!\n");
         return -1;
     }
 
@@ -202,7 +196,8 @@ int inference_yolov8_model(app_context_t *app_ctx, unsigned char *data, int size
     memset(inputs, 0, sizeof(inputs));
     memset(outputs, 0, sizeof(outputs));
 
-    ret = deal_image(app_ctx, &src_image, inputs);
+    ret = deal_image(app_ctx, &src_image, inputs, &resize);
+    inputs[0].pass_through = 0;
     if (ret < 0)
     {
         printf("deal_image fail! ret=%d\n", ret);
@@ -263,7 +258,13 @@ int inference_yolov8_model(app_context_t *app_ctx, unsigned char *data, int size
     }
 
     // Remeber to release rknn output
+    
     rknn_outputs_release(app_ctx->rknn_ctx, app_ctx->io_num.n_output, outputs);
+
+    if (resize)
+    {
+        free(inputs[0].buf);
+    }
 
     return ret;
 }

@@ -255,11 +255,12 @@ int inference_retinaface_model(app_context_t *app_ctx, unsigned char *data, int 
 {
     int ret;
     letterbox_t letter_box;
-    rknn_input inputs[1];
+    rknn_input inputs[app_ctx->io_num.n_input];
     rknn_output outputs[app_ctx->io_num.n_output];
     memset(inputs, 0, sizeof(inputs));
     memset(outputs, 0, sizeof(rknn_output) * 3);
     memset(&letter_box, 0, sizeof(letterbox_t));
+    bool resize = false;
     int bg_color = 114; // letterbox background pixel
 
     // 打印buffer
@@ -277,12 +278,20 @@ int inference_retinaface_model(app_context_t *app_ctx, unsigned char *data, int 
         return -1;
     }
 
+    ret = deal_image(app_ctx, &src_image, inputs, &resize);
+    if (ret < 0)
+    {
+        printf("deal_image fail! ret=%d\n", ret);
+        return -1;
+    }
+    printf("deal_image success!\n");
+
     // Set Input Data
-    inputs[0].index = 0;
-    inputs[0].type = RKNN_TENSOR_UINT8;
-    inputs[0].fmt = RKNN_TENSOR_NHWC;
-    inputs[0].size = app_ctx->model_width * app_ctx->model_height * app_ctx->model_channel;
-    inputs[0].buf = src_image.data;
+    // inputs[0].index = 0;
+    // inputs[0].type = RKNN_TENSOR_UINT8;
+    // inputs[0].fmt = RKNN_TENSOR_NHWC;
+    // inputs[0].size = app_ctx->model_width * app_ctx->model_height * app_ctx->model_channel;
+    // inputs[0].buf = src_image.data;
 
     ret = rknn_inputs_set(app_ctx->rknn_ctx, 1, inputs);
     if (ret < 0)
@@ -321,6 +330,11 @@ int inference_retinaface_model(app_context_t *app_ctx, unsigned char *data, int 
     // }
     // Remeber to release rknn output
     rknn_outputs_release(app_ctx->rknn_ctx, 3, outputs);
+
+    if (resize)
+    {
+        free(inputs[0].buf);
+    }
 
     return ret;
 }

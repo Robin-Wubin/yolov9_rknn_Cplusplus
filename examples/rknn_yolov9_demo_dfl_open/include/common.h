@@ -14,8 +14,6 @@
 
 #include "rknn_api.h"
 
-
-
 typedef struct
 {
     int x_pad;
@@ -39,6 +37,6 @@ int read_data_from_file(const char *path, char **out_data);
 
 void dump_tensor_attr(rknn_tensor_attr *attr);
 
-int deal_image(app_context_t *app_ctx, cv::Mat *src_image, rknn_input *inputs);
+int deal_image(app_context_t *app_ctx, cv::Mat *src_image, rknn_input *inputs, bool *resize);
 
 #endif
