@@ -3,6 +3,7 @@
 #include <string.h>
 #include <math.h>
 
+#include "common.h"
 #include "retinaface.h"
 
 #define NMS_THRESHOLD 0.4
@@ -16,15 +17,6 @@ static int clamp(int x, int min, int max)
     if (x < min)
         return min;
     return x;
-}
-
-static void dump_tensor_attr(rknn_tensor_attr *attr)
-{
-    printf("  index=%d, name=%s, n_dims=%d, dims=[%d, %d, %d, %d], n_elems=%d, size=%d, fmt=%s, type=%s, qnt_type=%s, "
-           "zp=%d, scale=%f\n",
-           attr->index, attr->name, attr->n_dims, attr->dims[3], attr->dims[2], attr->dims[1], attr->dims[0],
-           attr->n_elems, attr->size, get_format_string(attr->fmt), get_type_string(attr->type),
-           get_qnt_type_string(attr->qnt_type), attr->zp, attr->scale);
 }
 
 static float CalculateOverlap(float xmin0, float ymin0, float xmax0, float ymax0, float xmin1, float ymin1, float xmax1, float ymax1)
@@ -146,7 +138,7 @@ static int filterValidResult(float *scores, float *loc, float *landms, const flo
     return validCount;
 }
 
-int init_retinaface_model(const char *model_path, rknn_app_context_t *app_ctx)
+int init_retinaface_model(const char *model_path, app_context_t *app_ctx)
 {
     int ret;
     int model_len = 0;
@@ -161,7 +153,7 @@ int init_retinaface_model(const char *model_path, rknn_app_context_t *app_ctx)
         return -1;
     }
 
-    ret = rknn_init(&ctx, model, model_len, 0);
+    ret = rknn_init(&ctx, model, model_len, 0, NULL);
     free(model);
     if (ret < 0)
     {
@@ -239,7 +231,7 @@ int init_retinaface_model(const char *model_path, rknn_app_context_t *app_ctx)
     return 0;
 }
 
-int release_retinaface_model(rknn_app_context_t *app_ctx)
+int release_retinaface_model(app_context_t *app_ctx)
 {
     if (app_ctx->input_attrs != NULL)
     {
@@ -259,36 +251,29 @@ int release_retinaface_model(rknn_app_context_t *app_ctx)
     return 0;
 }
 
-int inference_retinaface_model(rknn_app_context_t *app_ctx, image_buffer_t *src_img, retinaface_result *out_result)
+int inference_retinaface_model(app_context_t *app_ctx, unsigned char *data, int size, retinaface_result *out_result)
 {
     int ret;
-    image_buffer_t img;
     letterbox_t letter_box;
     rknn_input inputs[1];
     rknn_output outputs[app_ctx->io_num.n_output];
-    memset(&img, 0, sizeof(image_buffer_t));
     memset(inputs, 0, sizeof(inputs));
     memset(outputs, 0, sizeof(rknn_output) * 3);
     memset(&letter_box, 0, sizeof(letterbox_t));
     int bg_color = 114; // letterbox background pixel
 
-    // Pre Process
-    img.width = app_ctx->model_width;
-    img.height = app_ctx->model_height;
-    img.format = IMAGE_FORMAT_RGB888;
-    img.size = get_image_size(&img);
-    img.virt_addr = (unsigned char *)malloc(img.size);
+    // 打印buffer
+    std::vector<unsigned char> png_data(data, data + size);
 
-    if (img.virt_addr == NULL)
-    {
-        printf("malloc buffer size:%d fail!\n", img.size);
-        return -1;
-    }
+    cv::Mat img_data = cv::Mat(png_data);
 
-    ret = convert_image_with_letterbox(src_img, &img, &letter_box, bg_color);
-    if (ret < 0)
+    // 将数据转换为OpenCV图像
+    cv::Mat src_image = cv::imdecode(img_data, cv::IMREAD_COLOR);
+
+    printf("Read img ...\n");
+    if (!src_image.data)
     {
-        printf("convert_image fail! ret=%d\n", ret);
+        printf("cv::imread fail!\n");
         return -1;
     }
 
@@ -297,7 +282,7 @@ int inference_retinaface_model(rknn_app_context_t *app_ctx, image_buffer_t *src_
     inputs[0].type = RKNN_TENSOR_UINT8;
     inputs[0].fmt = RKNN_TENSOR_NHWC;
     inputs[0].size = app_ctx->model_width * app_ctx->model_height * app_ctx->model_channel;
-    inputs[0].buf = img.virt_addr;
+    inputs[0].buf = src_image.data;
 
     ret = rknn_inputs_set(app_ctx->rknn_ctx, 1, inputs);
     if (ret < 0)
@@ -325,23 +310,17 @@ int inference_retinaface_model(rknn_app_context_t *app_ctx, image_buffer_t *src_
     if (ret < 0)
     {
         printf("rknn_outputs_get fail! ret=%d\n", ret);
-        goto out;
-    }
-
-    ret = post_process_retinaface(app_ctx, src_img, outputs, out_result, &letter_box);
-    if (ret < 0)
-    {
-        printf("post_process_retinaface fail! ret=%d\n", ret);
         return -1;
     }
+
+    // ret = post_process_retinaface(app_ctx, src_image, outputs, out_result, &letter_box);
+    // if (ret < 0)
+    // {
+    //     printf("post_process_retinaface fail! ret=%d\n", ret);
+    //     return -1;
+    // }
     // Remeber to release rknn output
     rknn_outputs_release(app_ctx->rknn_ctx, 3, outputs);
-
-out:
-    if (img.virt_addr != NULL)
-    {
-        free(img.virt_addr);
-    }
 
     return ret;
 }

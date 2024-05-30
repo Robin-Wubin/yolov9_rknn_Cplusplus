@@ -8,8 +8,8 @@
 using namespace Nan;
 using namespace v8;
 
-rknn_app_context_t rknn_app_ctx;
-rknn_app_context_t face_app_ctx;
+app_context_t rknn_app_ctx;
+app_context_t face_app_ctx;
 
 char yolov_path[256] = "model/yolov8n.rknn";
 char face_path[256] = "model/RetinaFace.rknn";
@@ -49,6 +49,10 @@ NAN_METHOD(AlgorithmMethod)
 
     int ret = inference_yolov8_model(&rknn_app_ctx, data, size, &od_results);
 
+    retinaface_result face_results;
+
+    ret = inference_retinaface_model(&face_app_ctx, data, size, &face_results);
+
     // 获取 Buffer 对象的数据指针和长度
 
     // 将结果转换为 V8 字符串并返回给 JavaScript
@@ -66,8 +70,6 @@ NAN_MODULE_INIT(Initialize)
     {
         return Nan::ThrowTypeError("init_yolov8_model fail!");
     }
-
-    int ret;
 
     ret = init_retinaface_model(face_path, &face_app_ctx);
     if (ret != 0)

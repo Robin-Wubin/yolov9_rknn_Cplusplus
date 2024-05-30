@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "yolov8.h"
+#include "postprocess.h"
 
 #include <math.h>
 #include <stdint.h>
@@ -23,6 +23,7 @@
 
 #include <set>
 #include <vector>
+
 #define LABEL_NALE_TXT_PATH "./model/coco_80_labels_list.txt"
 
 static char *labels[OBJ_CLASS_NUM];
@@ -446,7 +447,7 @@ static int process_fp32(float *box_tensor, float *score_tensor, float *score_sum
     return validCount;
 }
 
-int post_process(rknn_app_context_t *app_ctx, void *outputs, letterbox_t *letter_box, float conf_threshold, float nms_threshold, object_detect_result_list *od_results)
+int post_process(app_context_t *app_ctx, void *outputs, letterbox_t *letter_box, float conf_threshold, float nms_threshold, object_detect_result_list *od_results)
 {
 
     rknn_output *_outputs = (rknn_output *)outputs;
@@ -550,44 +551,4 @@ int post_process(rknn_app_context_t *app_ctx, void *outputs, letterbox_t *letter
     }
     od_results->count = last_count;
     return 0;
-}
-
-int init_post_process()
-{
-    int ret = 0;
-    ret = loadLabelName(LABEL_NALE_TXT_PATH, labels);
-    if (ret < 0)
-    {
-        printf("Load %s failed!\n", LABEL_NALE_TXT_PATH);
-        return -1;
-    }
-    return 0;
-}
-
-char *coco_cls_to_name(int cls_id)
-{
-
-    if (cls_id >= OBJ_CLASS_NUM)
-    {
-        return "null";
-    }
-
-    if (labels[cls_id])
-    {
-        return labels[cls_id];
-    }
-
-    return "null";
-}
-
-void deinit_post_process()
-{
-    for (int i = 0; i < OBJ_CLASS_NUM; i++)
-    {
-        if (labels[i] != nullptr)
-        {
-            free(labels[i]);
-            labels[i] = nullptr;
-        }
-    }
 }

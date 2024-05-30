@@ -2,7 +2,7 @@
   "targets": [
     {
       "target_name": "addon",
-      "sources": [ "./src/addon.cc", "./src/yolov8.cc", "./src/postprocess.cc" ],
+      "sources": [ "./src/addon.cc", "./src/common.cc", "./src/yolov8.cc", "./src/postprocess.cc", "./src/retinaface.cc" ],
       "cflags!": [ "-fno-rtti", "-fno-exceptions" ],
       "cflags_cc!": [ "-fno-rtti", "-fno-exceptions" ],
       "cflags": [ "-std=c++14", "-fexceptions", "-fPIC" ], 
