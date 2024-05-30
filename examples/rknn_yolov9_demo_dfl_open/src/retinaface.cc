@@ -4,6 +4,7 @@
 #include <math.h>
 
 #include "common.h"
+#include "image_utils.h"
 #include "retinaface.h"
 
 #define NMS_THRESHOLD 0.4
@@ -254,44 +255,51 @@ int release_retinaface_model(app_context_t *app_ctx)
 int inference_retinaface_model(app_context_t *app_ctx, unsigned char *data, int size, retinaface_result *out_result)
 {
     int ret;
+
+    image_buffer_t src_image;
+    image_buffer_t img;
     letterbox_t letter_box;
     rknn_input inputs[app_ctx->io_num.n_input];
     rknn_output outputs[app_ctx->io_num.n_output];
     memset(inputs, 0, sizeof(inputs));
     memset(outputs, 0, sizeof(rknn_output) * 3);
     memset(&letter_box, 0, sizeof(letterbox_t));
-    bool resize = false;
     int bg_color = 114; // letterbox background pixel
 
-    // 打印buffer
-    std::vector<unsigned char> png_data(data, data + size);
-
-    cv::Mat img_data = cv::Mat(png_data);
-
-    // 将数据转换为OpenCV图像
-    cv::Mat src_image = cv::imdecode(img_data, cv::IMREAD_COLOR);
-
-    printf("Read img ...\n");
-    if (!src_image.data)
+    memset(&src_image, 0, sizeof(image_buffer_t));
+    ret = read_image(&src_image, data, size);
+    if (ret != 0)
     {
-        printf("cv::imread fail!\n");
+        printf("read image fail! ret=%d image_path=%s\n", ret, image_path);
         return -1;
     }
 
-    ret = deal_image(app_ctx, &src_image, inputs, &resize);
+    // Pre Process
+    img.width = app_ctx->model_width;
+    img.height = app_ctx->model_height;
+    img.format = IMAGE_FORMAT_RGB888;
+    img.size = get_image_size(&img);
+    img.virt_addr = (unsigned char *)malloc(img.size);
+
+    if (img.virt_addr == NULL)
+    {
+        printf("malloc buffer size:%d fail!\n", img.size);
+        return -1;
+    }
+
+    ret = convert_image_with_letterbox(src_img, &img, &letter_box, bg_color);
     if (ret < 0)
     {
-        printf("deal_image fail! ret=%d\n", ret);
+        printf("convert_image fail! ret=%d\n", ret);
         return -1;
     }
-    printf("deal_image success!\n");
 
     // Set Input Data
-    // inputs[0].index = 0;
-    // inputs[0].type = RKNN_TENSOR_UINT8;
-    // inputs[0].fmt = RKNN_TENSOR_NHWC;
-    // inputs[0].size = app_ctx->model_width * app_ctx->model_height * app_ctx->model_channel;
-    // inputs[0].buf = src_image.data;
+    inputs[0].index = 0;
+    inputs[0].type = RKNN_TENSOR_UINT8;
+    inputs[0].fmt = RKNN_TENSOR_NHWC;
+    inputs[0].size = app_ctx->model_width * app_ctx->model_height * app_ctx->model_channel;
+    inputs[0].buf = img.virt_addr;
 
     ret = rknn_inputs_set(app_ctx->rknn_ctx, 1, inputs);
     if (ret < 0)
