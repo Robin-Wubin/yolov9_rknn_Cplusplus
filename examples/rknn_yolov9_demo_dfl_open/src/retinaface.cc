@@ -4,8 +4,8 @@
 #include <math.h>
 
 #include "common.h"
-#include "image_utils.h"
 #include "retinaface.h"
+#include "rknn_box_priors.h"
 
 #define NMS_THRESHOLD 0.4
 #define CONF_THRESHOLD 0.5
@@ -146,6 +146,7 @@ int init_retinaface_model(const char *model_path, app_context_t *app_ctx)
     char *model;
     rknn_context ctx = 0;
 
+    printf("-------------------- load retinaface\n");
     // Load RKNN Model
     model_len = read_data_from_file(model_path, &model);
     if (model == NULL)
@@ -201,7 +202,7 @@ int init_retinaface_model(const char *model_path, app_context_t *app_ctx)
             printf("rknn_query fail! ret=%d\n", ret);
             return -1;
         }
-        dump_tensor_attr(&(output_attrs[i]));
+        // dump_tensor_attr(&(output_attrs[i]));
     }
 
     // Set to context
@@ -215,16 +216,16 @@ int init_retinaface_model(const char *model_path, app_context_t *app_ctx)
     if (input_attrs[0].fmt == RKNN_TENSOR_NCHW)
     {
         printf("model is NCHW input fmt\n");
-        app_ctx->model_channel = input_attrs[0].dims[2];
-        app_ctx->model_height = input_attrs[0].dims[1];
-        app_ctx->model_width = input_attrs[0].dims[0];
+        app_ctx->model_channel = input_attrs[0].dims[3];
+        app_ctx->model_height = input_attrs[0].dims[2];
+        app_ctx->model_width = input_attrs[0].dims[1];
     }
     else
     {
         printf("model is NHWC input fmt\n");
-        app_ctx->model_height = input_attrs[0].dims[2];
-        app_ctx->model_width = input_attrs[0].dims[1];
-        app_ctx->model_channel = input_attrs[0].dims[0];
+        app_ctx->model_height = input_attrs[0].dims[3];
+        app_ctx->model_width = input_attrs[0].dims[2];
+        app_ctx->model_channel = input_attrs[0].dims[1];
     }
     printf("model input height=%d, width=%d, channel=%d\n",
            app_ctx->model_height, app_ctx->model_width, app_ctx->model_channel);
@@ -252,12 +253,10 @@ int release_retinaface_model(app_context_t *app_ctx)
     return 0;
 }
 
-int inference_retinaface_model(app_context_t *app_ctx, unsigned char *data, int size, retinaface_result *out_result)
+int inference_retinaface_model(app_context_t *app_ctx, cv::Mat *src_image, retinaface_result *out_result)
 {
     int ret;
 
-    image_buffer_t src_image;
-    image_buffer_t img;
     letterbox_t letter_box;
     rknn_input inputs[app_ctx->io_num.n_input];
     rknn_output outputs[app_ctx->io_num.n_output];
@@ -265,41 +264,14 @@ int inference_retinaface_model(app_context_t *app_ctx, unsigned char *data, int 
     memset(outputs, 0, sizeof(rknn_output) * 3);
     memset(&letter_box, 0, sizeof(letterbox_t));
     int bg_color = 114; // letterbox background pixel
+    bool resize = false;
 
-    memset(&src_image, 0, sizeof(image_buffer_t));
-    ret = read_image(&src_image, data, size);
-    if (ret != 0)
-    {
-        printf("read image fail! ret=%d\n", ret);
-        return -1;
-    }
-
-    // Pre Process
-    img.width = app_ctx->model_width;
-    img.height = app_ctx->model_height;
-    img.format = IMAGE_FORMAT_RGB888;
-    img.size = get_image_size(&img);
-    img.virt_addr = (unsigned char *)malloc(img.size);
-
-    if (img.virt_addr == NULL)
-    {
-        printf("malloc buffer size:%d fail!\n", img.size);
-        return -1;
-    }
-
-    ret = convert_image_with_letterbox(&src_image, &img, &letter_box, bg_color);
+    ret = deal_image(app_ctx, src_image, inputs, &resize);
     if (ret < 0)
     {
-        printf("convert_image fail! ret=%d\n", ret);
+        printf("deal_image fail! ret=%d\n", ret);
         return -1;
     }
-
-    // Set Input Data
-    inputs[0].index = 0;
-    inputs[0].type = RKNN_TENSOR_UINT8;
-    inputs[0].fmt = RKNN_TENSOR_NHWC;
-    inputs[0].size = app_ctx->model_width * app_ctx->model_height * app_ctx->model_channel;
-    inputs[0].buf = img.virt_addr;
 
     ret = rknn_inputs_set(app_ctx->rknn_ctx, 1, inputs);
     if (ret < 0)
@@ -345,4 +317,82 @@ int inference_retinaface_model(app_context_t *app_ctx, unsigned char *data, int 
     }
 
     return ret;
+}
+
+int post_process_retinaface(app_context_t *app_ctx, int width, int height, rknn_output outputs[], retinaface_result *result, letterbox_t *letter_box)
+{
+    float *location = (float *)outputs[0].buf;
+    float *scores = (float *)outputs[1].buf;
+    float *landms = (float *)outputs[2].buf;
+    const float(*prior_ptr)[4];
+    int num_priors = 0;
+    if (app_ctx->model_height == 320)
+    {
+        num_priors = 4200; // anchors box number
+        prior_ptr = BOX_PRIORS_320;
+    }
+    else if (app_ctx->model_height == 640)
+    {
+        num_priors = 16800; // anchors box number
+        prior_ptr = BOX_PRIORS_640;
+    }
+    else
+    {
+        printf("model_shape error!!!\n");
+        return -1;
+    }
+
+    int filter_indices[num_priors];
+    float props[num_priors];
+
+    memset(filter_indices, 0, sizeof(int) * num_priors);
+    memset(props, 0, sizeof(float) * num_priors);
+
+    int validCount = filterValidResult(scores, location, landms, prior_ptr, app_ctx->model_height, app_ctx->model_width,
+                                       filter_indices, props, CONF_THRESHOLD, num_priors);
+
+    quick_sort_indice_inverse(props, 0, validCount - 1, filter_indices);
+    nms(validCount, location, filter_indices, NMS_THRESHOLD, width, height);
+
+    int last_count = 0;
+    result->count = 0;
+    for (int i = 0; i < validCount; ++i)
+    {
+        if (last_count >= 128)
+        {
+            printf("Warning: detected more than 128 faces, can not handle that");
+            break;
+        }
+        if (filter_indices[i] == -1 || props[i] < VIS_THRESHOLD)
+        {
+            continue;
+        }
+
+        int n = filter_indices[i];
+
+        float x1 = location[n * 4 + 0] * app_ctx->model_width - letter_box->x_pad;
+        float y1 = location[n * 4 + 1] * app_ctx->model_height - letter_box->y_pad;
+        float x2 = location[n * 4 + 2] * app_ctx->model_width - letter_box->x_pad;
+        float y2 = location[n * 4 + 3] * app_ctx->model_height - letter_box->y_pad;
+        int model_in_w = app_ctx->model_width;
+        int model_in_h = app_ctx->model_height;
+        result->object[last_count].box.left = (int)(clamp(x1, 0, model_in_w) / letter_box->scale); // Face box
+        result->object[last_count].box.top = (int)(clamp(y1, 0, model_in_h) / letter_box->scale);
+        result->object[last_count].box.right = (int)(clamp(x2, 0, model_in_w) / letter_box->scale);
+        result->object[last_count].box.bottom = (int)(clamp(y2, 0, model_in_h) / letter_box->scale);
+        result->object[last_count].score = props[i]; // Confidence
+
+        for (int j = 0; j < 5; ++j)
+        { // Facial feature points
+            float ponit_x = landms[n * 10 + 2 * j] * app_ctx->model_width - letter_box->x_pad;
+            float ponit_y = landms[n * 10 + 2 * j + 1] * app_ctx->model_height - letter_box->y_pad;
+            result->object[last_count].ponit[j].x = (int)(clamp(ponit_x, 0, model_in_w) / letter_box->scale);
+            result->object[last_count].ponit[j].y = (int)(clamp(ponit_y, 0, model_in_h) / letter_box->scale);
+        }
+        last_count++;
+    }
+
+    result->count = last_count;
+
+    return 0;
 }

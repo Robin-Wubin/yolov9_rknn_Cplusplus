@@ -19,46 +19,9 @@
 
 #include "image_utils.h"
 
-
 static const char *subsampName[TJ_NUMSAMP] = {"4:4:4", "4:2:2", "4:2:0", "Grayscale", "4:4:0", "4:1:1"};
 
 static const char *colorspaceName[TJ_NUMCS] = {"RGB", "YCbCr", "GRAY", "CMYK", "YCCK"};
-
-static int write_image_jpeg(const char *path, int quality, const image_buffer_t *image)
-{
-    int ret;
-    int jpegSubsamp = TJSAMP_422;
-    unsigned char *jpegBuf = NULL;
-    unsigned long jpegSize = 0;
-    int flags = 0;
-
-    const unsigned char *data = image->virt_addr;
-    int width = image->width;
-    int height = image->height;
-    int pixelFormat = TJPF_RGB;
-
-    tjhandle handle = tjInitCompress();
-
-    if (image->format == IMAGE_FORMAT_RGB888)
-    {
-        ret = tjCompress2(handle, data, width, 0, height, pixelFormat, &jpegBuf, &jpegSize, jpegSubsamp, quality, flags);
-    }
-    else
-    {
-        printf("write_image_jpeg: pixel format %d not support\n", image->format);
-        return -1;
-    }
-
-    // printf("ret=%d jpegBuf=%p jpegSize=%d\n", ret, jpegBuf, jpegSize);
-    if (jpegBuf != NULL && jpegSize > 0)
-    {
-        write_data_to_file(path, (const char *)jpegBuf, jpegSize);
-        tjFree(jpegBuf);
-    }
-    tjDestroy(handle);
-
-    return 0;
-}
 
 int read_image(image_buffer_t *image, unsigned char *data, int size)
 {
@@ -67,9 +30,10 @@ int read_image(image_buffer_t *image, unsigned char *data, int size)
     int origin_width, origin_height;
     int width, height;
     int subsample, colorspace;
+    unsigned short orientation = 1;
     tjhandle handle = NULL;
     handle = tjInitDecompress();
-    ret = tjDecompressHeader3(handle, data, size, &origin_width, &origin_height, &subsample, &colorspace);
+    int ret = tjDecompressHeader3(handle, data, size, &origin_width, &origin_height, &subsample, &colorspace);
     if (ret < 0)
     {
         printf("header file error, errorStr:%s, errorCode:%d\n", tjGetErrorStr(), tjGetErrorCode(handle));
@@ -130,45 +94,6 @@ int read_image(image_buffer_t *image, unsigned char *data, int size)
     image->size = sw_out_size;
 
     return 0;
-}
-
-int write_image(const char *path, const image_buffer_t *img)
-{
-    int ret;
-    int width = img->width;
-    int height = img->height;
-    int channel = 3;
-    void *data = img->virt_addr;
-    printf("write_image path: %s width=%d height=%d channel=%d data=%p\n",
-           path, width, height, channel, data);
-
-    const char *_ext = strrchr(path, '.');
-    if (!_ext)
-    {
-        // missing extension
-        return -1;
-    }
-    if (strcmp(_ext, ".jpg") == 0 || strcmp(_ext, ".jpeg") == 0 || strcmp(_ext, ".JPG") == 0 ||
-        strcmp(_ext, ".JPEG") == 0)
-    {
-        int quality = 95;
-        ret = write_image_jpeg(path, quality, img);
-    }
-    else if (strcmp(_ext, ".png") == 0 | strcmp(_ext, ".PNG") == 0)
-    {
-        ret = stbi_write_png(path, width, height, channel, data, 0);
-    }
-    else if (strcmp(_ext, ".data") == 0 | strcmp(_ext, ".DATA") == 0)
-    {
-        int size = get_image_size(img);
-        ret = write_data_to_file(path, data, size);
-    }
-    else
-    {
-        // unknown extension type
-        return -1;
-    }
-    return ret;
 }
 
 static int crop_and_scale_image_c(int channel, unsigned char *src, int src_width, int src_height,
@@ -566,7 +491,7 @@ static int convert_image_rga(image_buffer_t *src_img, image_buffer_t *dst_img, i
     {
         im_rect dst_whole_rect = {0, 0, dstWidth, dstHeight};
         int imcolor;
-        char *p_imcolor = &imcolor;
+        char *p_imcolor = (char *)&imcolor;
         p_imcolor[0] = color;
         p_imcolor[1] = color;
         p_imcolor[2] = color;

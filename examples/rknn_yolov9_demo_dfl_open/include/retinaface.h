@@ -39,6 +39,8 @@ int init_retinaface_model(const char *model_path, app_context_t *app_ctx);
 
 int release_retinaface_model(app_context_t *app_ctx);
 
-int inference_retinaface_model(app_context_t *app_ctx, unsigned char *data, int size, retinaface_result *out_result);
+int inference_retinaface_model(app_context_t *app_ctx, cv::Mat *src_image, retinaface_result *out_result);
+
+int post_process_retinaface(app_context_t *app_ctx, int width, int height, rknn_output outputs[], retinaface_result *result, letterbox_t *letter_box);
 
 #endif //_RKNN_DEMO_MOBILENET_H_

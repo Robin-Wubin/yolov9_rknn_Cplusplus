@@ -14,12 +14,28 @@
 
 #include "rknn_api.h"
 
+#define OBJ_NUMB_MAX_SIZE 128
+
+#define OBJ_CLASS_NUM 80
+
 typedef struct
 {
     int x_pad;
     int y_pad;
     float scale;
 } letterbox_t;
+
+/**
+ * @brief Image rectangle
+ *
+ */
+typedef struct
+{
+    int left;
+    int top;
+    int right;
+    int bottom;
+} image_rect_t;
 
 typedef struct
 {
@@ -32,6 +48,20 @@ typedef struct
     int model_height;
     bool is_quant;
 } app_context_t;
+
+typedef struct
+{
+    image_rect_t box;
+    float prop;
+    int cls_id;
+} object_detect_result;
+
+typedef struct
+{
+    int id;
+    int count;
+    object_detect_result results[OBJ_NUMB_MAX_SIZE];
+} object_detect_result_list;
 
 int read_data_from_file(const char *path, char **out_data);
 
@@ -67,17 +97,5 @@ typedef struct
     int size;
     int fd;
 } image_buffer_t;
-
-/**
- * @brief Image rectangle
- *
- */
-typedef struct
-{
-    int left;
-    int top;
-    int right;
-    int bottom;
-} image_rect_t;
 
 #endif

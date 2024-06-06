@@ -20,6 +20,7 @@
 #include "common.h"
 #include "yolov8.h"
 #include "postprocess.h"
+#include "image_utils.h"
 
 double __get_us(struct timeval t) { return (t.tv_sec * 1000000 + t.tv_usec); }
 
@@ -30,6 +31,7 @@ int init_yolov8_model(const char *model_path, app_context_t *app_ctx)
     char *model;
     rknn_context ctx = 0;
 
+    printf("-------------------- load yolov8\n");
     // Load RKNN Model
     model_len = read_data_from_file(model_path, &model);
     if (model == NULL)
@@ -57,7 +59,7 @@ int init_yolov8_model(const char *model_path, app_context_t *app_ctx)
     printf("model input num: %d, output num: %d\n", io_num.n_input, io_num.n_output);
 
     // Get Model Input Info
-    printf("input tensors:\n");
+    // printf("input tensors:\n");
     rknn_tensor_attr input_attrs[io_num.n_input];
     memset(input_attrs, 0, sizeof(input_attrs));
     for (int i = 0; i < io_num.n_input; i++)
@@ -72,23 +74,8 @@ int init_yolov8_model(const char *model_path, app_context_t *app_ctx)
         dump_tensor_attr(&(input_attrs[i]));
     }
 
-    if (input_attrs[0].fmt == RKNN_TENSOR_NCHW)
-    {
-        printf("model is NCHW input fmt\n");
-        app_ctx->model_channel = input_attrs[0].dims[1];
-        app_ctx->model_height = input_attrs[0].dims[2];
-        app_ctx->model_width = input_attrs[0].dims[3];
-    }
-    else
-    {
-        printf("model is NHWC input fmt\n");
-        app_ctx->model_channel = input_attrs[0].dims[1];
-        app_ctx->model_height = input_attrs[0].dims[2];
-        app_ctx->model_width = input_attrs[0].dims[3];
-    }
-
     // Get Model Output Info
-    printf("output tensors:\n");
+    // printf("output tensors:\n");
     rknn_tensor_attr output_attrs[io_num.n_output];
     memset(output_attrs, 0, sizeof(output_attrs));
     for (int i = 0; i < io_num.n_output; i++)
@@ -100,7 +87,7 @@ int init_yolov8_model(const char *model_path, app_context_t *app_ctx)
             printf("rknn_query fail! ret=%d\n", ret);
             return -1;
         }
-        dump_tensor_attr(&(output_attrs[i]));
+        // dump_tensor_attr(&(output_attrs[i]));
     }
 
     // Set to context
@@ -162,47 +149,57 @@ int release_yolov8_model(app_context_t *app_ctx)
     return 0;
 }
 
-int inference_yolov8_model(app_context_t *app_ctx, unsigned char *data, int size, object_detect_result_list *od_results)
+int inference_yolov8_model(app_context_t *app_ctx, image_buffer_t *img, object_detect_result_list *od_results)
 {
 
     struct timeval start_time, stop_time;
+
     int ret;
+    image_buffer_t dst_img;
+    letterbox_t letter_box;
     rknn_input inputs[app_ctx->io_num.n_input];
     rknn_output outputs[app_ctx->io_num.n_output];
     const float nms_threshold = NMS_THRESH;      // 默认的NMS阈值
     const float box_conf_threshold = BOX_THRESH; // 默认的置信度阈值
     int bg_color = 114;
-    bool resize = false;
 
-    if ((!app_ctx) || !(data) || (!od_results))
-    {
-        return -1;
-    }
-
-    // 打印buffer
-    std::vector<unsigned char> png_data(data, data + size);
-
-    cv::Mat img_data = cv::Mat(png_data);
-
-    // 将数据转换为OpenCV图像
-    cv::Mat src_image = cv::imdecode(img_data, cv::IMREAD_COLOR);
-
-    if (!src_image.data)
+    if ((!app_ctx) || !(img) || (!od_results))
     {
         return -1;
     }
 
     memset(od_results, 0x00, sizeof(*od_results));
+    memset(&letter_box, 0, sizeof(letterbox_t));
+    memset(&dst_img, 0, sizeof(image_buffer_t));
     memset(inputs, 0, sizeof(inputs));
     memset(outputs, 0, sizeof(outputs));
 
-    ret = deal_image(app_ctx, &src_image, inputs, &resize);
-    inputs[0].pass_through = 0;
-    if (ret < 0)
+    // Pre Process
+    dst_img.width = app_ctx->model_width;
+    dst_img.height = app_ctx->model_height;
+    dst_img.format = IMAGE_FORMAT_RGB888;
+    dst_img.size = get_image_size(&dst_img);
+    dst_img.virt_addr = (unsigned char *)malloc(dst_img.size);
+    if (dst_img.virt_addr == NULL)
     {
-        printf("deal_image fail! ret=%d\n", ret);
+        printf("malloc buffer size:%d fail!\n", dst_img.size);
         return -1;
     }
+
+    // letterbox
+    ret = convert_image_with_letterbox(img, &dst_img, &letter_box, bg_color);
+    if (ret < 0)
+    {
+        printf("convert_image_with_letterbox fail! ret=%d\n", ret);
+        return -1;
+    }
+
+    // Set Input Data
+    inputs[0].index = 0;
+    inputs[0].type = RKNN_TENSOR_UINT8;
+    inputs[0].fmt = RKNN_TENSOR_NHWC;
+    inputs[0].size = app_ctx->model_width * app_ctx->model_height * app_ctx->model_channel;
+    inputs[0].buf = dst_img.virt_addr;
 
     gettimeofday(&start_time, NULL);
     ret = rknn_inputs_set(app_ctx->rknn_ctx, app_ctx->io_num.n_input, inputs);
@@ -246,25 +243,12 @@ int inference_yolov8_model(app_context_t *app_ctx, unsigned char *data, int size
 
     printf("model once run use %f ms\n", (__get_us(stop_time) - __get_us(start_time)) / 1000);
 
-    letterbox_t letter_box;
-
     // Post Process
     post_process(app_ctx, outputs, &letter_box, box_conf_threshold, nms_threshold, od_results);
 
-    // 遍历od_results并打印里面的内容
-    for (int i = 0; i < od_results->count; i++)
-    {
-        printf("object %d: class=%d\n", i, od_results->results[i].cls_id);
-    }
-
     // Remeber to release rknn output
-    
-    rknn_outputs_release(app_ctx->rknn_ctx, app_ctx->io_num.n_output, outputs);
 
-    if (resize)
-    {
-        free(inputs[0].buf);
-    }
+    rknn_outputs_release(app_ctx->rknn_ctx, app_ctx->io_num.n_output, outputs);
 
     return ret;
 }

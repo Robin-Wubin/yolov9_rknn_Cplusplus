@@ -7,13 +7,13 @@ fs.readFile("./1008.jpeg", (err, data) => {
     if (err) throw err;
 
     const dataSize = data.length;
-    addon.algorithm(data, dataSize);
-    addon.algorithm(data, dataSize);
-    addon.algorithm(data, dataSize);
-    addon.algorithm(data, dataSize);
-    addon.algorithm(data, dataSize);
-    addon.algorithm(data, dataSize);
-    addon.algorithm(data, dataSize);
+    // addon.algorithm(data, dataSize);
+    // addon.algorithm(data, dataSize);
+    // addon.algorithm(data, dataSize);
+    // addon.algorithm(data, dataSize);
+    // addon.algorithm(data, dataSize);
+    // addon.algorithm(data, dataSize);
+    // addon.algorithm(data, dataSize);
     const res = addon.algorithm(data, dataSize);
     console.log(res);
   

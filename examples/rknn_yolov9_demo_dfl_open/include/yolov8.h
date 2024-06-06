@@ -19,31 +19,15 @@
 #include <sys/time.h>
 #include "common.h"
 
-#define OBJ_CLASS_NUM 80
 #define OBJ_NAME_MAX_SIZE 64
-#define OBJ_NUMB_MAX_SIZE 128
 
 #define NMS_THRESH 0.45
 #define BOX_THRESH 0.25
-
-typedef struct
-{
-    image_rect_t box;
-    float prop;
-    int cls_id;
-} object_detect_result;
-
-typedef struct
-{
-    int id;
-    int count;
-    object_detect_result results[OBJ_NUMB_MAX_SIZE];
-} object_detect_result_list;
 
 int init_yolov8_model(const char *model_path, app_context_t *app_ctx);
 
 int release_yolov8_model(app_context_t *app_ctx);
 
-int inference_yolov8_model(app_context_t *app_ctx, unsigned char *data, int size, object_detect_result_list *od_results);
+int inference_yolov8_model(app_context_t *app_ctx, image_buffer_t *img, object_detect_result_list *od_results);
 
 #endif //_RKNN_DEMO_YOLOV8_H_

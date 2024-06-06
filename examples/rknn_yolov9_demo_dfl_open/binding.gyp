@@ -8,13 +8,12 @@
       "cflags": [ "-std=c++14", "-fexceptions", "-fPIC" ], 
       "include_dirs": [
         "<!(node -e \"require('nan')\")",
-        "<!@(pkg-config --cflags opencv4)",
-        "../3rdparty/opencv/opencv-linux-aarch64/include",
         "../3rdparty/rga/RK356X/include",
         "../3rdparty/rk_mpi_mmz/include",
         "../3rdparty/stb",
         "../3rdparty/jpeg_turbo/include",
         "./include",
+        "/usr/include/opencv4",
         "/usr/lib/include",
         "/usr/local/include"
       ],
